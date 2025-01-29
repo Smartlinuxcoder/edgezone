@@ -23,6 +23,7 @@ async fn create_tables(db: &libsql::Database) {
         install_cmd TEXT,
         build_cmd TEXT,
         run_cmd TEXT NOT NULL,
+        env TEXT,
         healthcheck_endpoint TEXT,
         healthcheck_timeout INTEGER DEFAULT 5000,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP

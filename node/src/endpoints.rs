@@ -15,6 +15,7 @@ pub struct Project {
     pub install_cmd: String,
     pub build_cmd: String,
     pub run_cmd: String,
+    pub env: Option<String>,
     pub healthcheck_endpoint: String,
     pub healthcheck_timeout: i32,
 }
@@ -111,7 +112,7 @@ pub async fn get_project(
 
     let mut rows = conn
         .query(
-            "SELECT id, name, git_repo, install_cmd, build_cmd, run_cmd, healthcheck_endpoint, healthcheck_timeout FROM projects WHERE id = ?",
+            "SELECT id, name, git_repo, install_cmd, build_cmd, run_cmd, env, healthcheck_endpoint, healthcheck_timeout FROM projects WHERE id = ?",
             [id],
         )
         .await
@@ -130,8 +131,9 @@ pub async fn get_project(
         install_cmd: row.get(3).unwrap(),
         build_cmd: row.get(4).unwrap(),
         run_cmd: row.get(5).unwrap(),
-        healthcheck_endpoint: row.get(6).unwrap(),
-        healthcheck_timeout: row.get(7).unwrap(),
+        env: row.get(6).unwrap(),
+        healthcheck_endpoint: row.get(7).unwrap(),
+        healthcheck_timeout: row.get(8).unwrap(),
     }))
 }
 

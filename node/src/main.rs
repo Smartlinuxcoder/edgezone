@@ -1,13 +1,8 @@
-use crate::db::AppState;
 use axum::{
-    extract::State,
-    http::StatusCode,
-    routing::{delete, get, post, put},
-    Json, Router,
+    routing::{delete, get, post, put}, Router,
 };
-use serde_derive::{Deserialize, Serialize};
 
-mod projects;
+mod endpoints;
 mod db;
 
 #[tokio::main]
@@ -19,16 +14,16 @@ async fn main() {
     let app = Router::new()
         .route("/", get(root))
         // Project routes
-        .route("/projects", post(projects::create_project))
-        .route("/projects", get(projects::list_projects))
-        .route("/projects/{id}", get(projects::get_project))
-        .route("/projects/{id}", put(projects::update_project))
-        .route("/projects/{id}", delete(projects::delete_project))
+        .route("/projects", post(endpoints::create_project))
+        .route("/projects", get(endpoints::list_projects))
+        .route("/projects/{id}", get(endpoints::get_project))
+        .route("/projects/{id}", put(endpoints::update_project))
+        .route("/projects/{id}", delete(endpoints::delete_project))
         // Deployment routes
-        .route("/projects/{id}/deploy", post(projects::deploy))
-        .route("/projects/{id}/deployments", get(projects::list_deployments))
-        .route("/projects/{project_id}/deployments/{deployment_id}", get(projects::get_deployment))
-        .route("/projects/{project_id}/deployments/{deployment_id}/restart", post(projects::restart_deployment))
+        .route("/projects/{id}/deploy", post(endpoints::deploy))
+        .route("/projects/{id}/deployments", get(endpoints::list_deployments))
+        .route("/projects/{project_id}/deployments/{deployment_id}", get(endpoints::get_deployment))
+        .route("/projects/{project_id}/deployments/{deployment_id}/restart", post(endpoints::restart_deployment))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
