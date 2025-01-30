@@ -7,12 +7,10 @@ pub async fn new_project(path: &String) -> Result<(), AppError> {
     fs::create_dir_all(format!("projects/{}", path))?;
     Ok(())
 }
-
 pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
     let db = db::init_db().await;
     let conn = db.db.connect()?;
     
-    // Helper function to update logs
     async fn update_logs(conn: &libsql::Connection, deployment_id: i64, new_logs: &str) -> Result<(), AppError> {
         conn.execute(
             "UPDATE deployments SET logs = logs || ? WHERE id = ?",
@@ -48,6 +46,12 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
     update_logs(&conn, deployment_id, &log_msg).await?;
     
     fs::create_dir_all(&path)?;
+
+    if let Some(env_vars) = project.env {
+        let env_path = format!("{}/{}", path, ".env");
+        fs::write(&env_path, env_vars)?;
+        update_logs(&conn, deployment_id, "Created .env file\n").await?;
+    }
 
     let output = tokio::process::Command::new("git")
         .arg("clone")
@@ -107,7 +111,6 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
         .stderr(std::process::Stdio::piped())
         .spawn()?;
 
-    // Handle output in background
     let deployment_id_clone = deployment_id;
     let conn_clone = conn.clone();
     tokio::spawn(async move {
@@ -132,3 +135,5 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
 
     Ok(())
 }
+
+
