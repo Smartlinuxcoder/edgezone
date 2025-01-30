@@ -4,6 +4,7 @@ use axum::{
 
 mod endpoints;
 mod db;
+mod error;
 
 #[tokio::main]
 async fn main() {
