@@ -30,20 +30,20 @@ export async function POST({ params, url, request }) {
     const path = url.searchParams.get('path') || '';
 
     try {
-        const body = await request.json();
+        const body = await request.json().catch(() => ({}));
         const response = await fetch(`${server.url}${path}`, {
             method: 'POST',
-
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify(body)
         });
 
         if (!response.ok) {
-            throw new Error(`Server responded with status: ${response.status}`);
-        }
-
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('Server did not return JSON response');
+            const errorText = await response.text();
+            console.error('Server error response:', errorText);
+            throw error(response.status, 'Server request failed');
         }
 
         const text = await response.text();
@@ -51,8 +51,13 @@ export async function POST({ params, url, request }) {
             return json({});
         }
 
-        const data = JSON.parse(text);
-        return json(data);
+        try {
+            const data = JSON.parse(text);
+            return json(data);
+        } catch (e) {
+            console.error('JSON parse error:', text);
+            throw error(500, 'Invalid JSON response from server');
+        }
 
     } catch (e) {
         console.error('Deployment error:', {
@@ -60,7 +65,7 @@ export async function POST({ params, url, request }) {
             stack: e.stack,
             url: `${server.url}${path}`
         });
-        throw error(500, 'Failed to send or process data from server');
+        throw error(500, e.message || 'Failed to send or process data from server');
     }
 }
 

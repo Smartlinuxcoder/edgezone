@@ -4,7 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{StatusCode, HeaderMap, header},
     Json,
 };
 
@@ -148,10 +148,10 @@ pub async fn update_project(
 pub async fn deploy(
     State(state): State<AppState>,
     Path(project_id): Path<String>,
-) -> Result<(StatusCode, Json<Deployment>), AppError> {
+) -> Result<(StatusCode, HeaderMap, Json<Deployment>), AppError> {
     let conn = state.db.connect()?;
     let deployment = Deployment {
-        id: None,
+        id: Some(0),  // Set temporary ID
         project_id: project_id.parse()?,
         commit_hash: String::new(),
         status: 0,
@@ -171,13 +171,21 @@ pub async fn deploy(
     .await?;
     let deployment_id = conn.last_insert_rowid();
 
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+
+    let deployment = Deployment {
+        id: Some(deployment_id as i32),
+        ..deployment
+    };
+
     tokio::spawn(async move {
         if let Err(e) = core::deploy(project_id.parse().unwrap(), deployment_id).await {
             eprintln!("Deployment error: {:?}", e);
         }
     });
 
-    Ok((StatusCode::CREATED, Json(deployment)))
+    Ok((StatusCode::CREATED, headers, Json(deployment)))
 }
 
 pub async fn delete_project(
