@@ -136,13 +136,14 @@ pub async fn update_project(
     let conn = state.db.connect()?;
 
     conn.execute(
-        "UPDATE projects SET name = ?, git_repo = ?, install_cmd = ?, build_cmd = ?, run_cmd = ?, healthcheck_endpoint = ?, healthcheck_timeout = ? WHERE id = ?",
+        "UPDATE projects SET name = ?, git_repo = ?, install_cmd = ?, build_cmd = ?, run_cmd = ?, env = ?, healthcheck_endpoint = ?, healthcheck_timeout = ? WHERE id = ?",
         (
             project.name.clone(),
             project.git_repo.clone(),
             project.install_cmd.clone(),
             project.build_cmd.clone(),
             project.run_cmd.clone(),
+            project.env.clone(),
             project.healthcheck_endpoint.clone(),
             project.healthcheck_timeout,
             id,

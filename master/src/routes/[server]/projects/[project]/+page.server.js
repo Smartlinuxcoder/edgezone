@@ -25,24 +25,35 @@ export const load = async ({ fetch, params }) => {
 };
 
 export const actions = {
-    updateProject: async ({ params, request }) => {
+    updateProject: async ({ fetch, params, request }) => {
         const data = await request.formData();
-        const projectData = {
-            name: data.get('name'),
-            git_repo: data.get('git_repo'),
-            install_cmd: data.get('install_cmd') || null,
-            build_cmd: data.get('build_cmd') || null,
-            run_cmd: data.get('run_cmd'),
-            env: data.get('env') || null,
-            healthcheck_endpoint: data.get('healthcheck_endpoint') || null,
-            healthcheck_timeout: Number(data.get('healthcheck_timeout')) || 30
-        };
         const domain = data.get('domain');
 
         try {
-            await db.update(projects)
-                .set({ domain })
-                .where(eq(projects.id, Number(params.project)));
+            if (domain !== undefined) {
+                await db.update(projects)
+                    .set({ domain })
+                    .where(eq(projects.id, Number(params.project)));
+            }
+            
+            const project = {
+                name: data.get('name'),
+                git_repo: data.get('git_repo'),
+                install_cmd: data.get('install_cmd') || null,
+                build_cmd: data.get('build_cmd') || null,
+                run_cmd: data.get('run_cmd'),
+                env: data.get('env') || null,
+                healthcheck_endpoint: data.get('healthcheck_endpoint') || null,
+                healthcheck_timeout: Number(data.get('healthcheck_timeout')) || 30
+            };
+
+            const res = await fetch(`/api/servers/${params.server}?path=/projects/${params.project}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(project)
+            });
+            
+            if (!res.ok) throw new Error('Failed to update project');
                 
             return { success: true };
         } catch (e) {
@@ -59,7 +70,6 @@ export const actions = {
 
             if (!res.ok) throw new Error('Failed to start deployment');
             
-            // Return the new deployment data
             const deployment = await res.json();
             return { 
                 success: true,

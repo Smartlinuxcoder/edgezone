@@ -90,12 +90,6 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
     
     fs::create_dir_all(&path)?;
 
-    if let Some(env_vars) = project.env {
-        let env_path = format!("{}/{}", path, ".env");
-        fs::write(&env_path, env_vars)?;
-        update_logs(&conn, deployment_id, "Created .env file\n").await?;
-    }
-
     let output = tokio::process::Command::new("git")
         .arg("clone")
         .arg(&project.git_repo)
@@ -109,6 +103,12 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
         let error = String::from_utf8_lossy(&output.stderr).to_string();
         update_logs(&conn, deployment_id, &format!("Error: {}\n", error)).await?;
         return Err(AppError::Internal(error));
+    }
+
+    if let Some(env_vars) = project.env {
+        let env_path = format!("{}/{}", path, ".env");
+        fs::write(&env_path, env_vars)?;
+        update_logs(&conn, deployment_id, "Created .env file\n").await?;
     }
 
     if let Some(cmd) = project.install_cmd.as_deref() {

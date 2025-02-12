@@ -6,9 +6,7 @@
 <div
     class="min-h-screen bg-gradient-to-b from-[#1e1e2e] via-[#1e1e2e] to-[#181825] overflow-hidden"
 >
-    <!-- Enhanced background elements -->
     <div class="fixed inset-0 overflow-hidden pointer-events-none">
-        <!-- Large gradient blobs -->
         <div
             class="absolute -top-[40%] -right-[20%] w-[80%] h-[80%] rounded-full
                     bg-gradient-to-br from-[#cba6f7]/10 via-[#89b4fa]/5 to-transparent blur-3xl"
@@ -18,22 +16,18 @@
                     bg-gradient-to-tr from-[#f5c2e7]/5 via-[#89b4fa]/5 to-transparent blur-3xl"
         ></div>
 
-        <!-- Animated accent lines -->
-        {#each Array(8) as _, i}
+        {#each Array(15) as _, i}
             <div
-                class="absolute animate-float"
+                class="absolute animate-float opacity-0"
                 style="top: {Math.random() * 100}%; left: {Math.random() *
                     100}%; 
-                        animation-delay: -{Math.random() * 5}s; 
-                        animation-duration: {5 + Math.random() * 5}s"
+                       animation-delay: -{Math.random() * 8}s; 
+                       animation-duration: {8 + Math.random() * 7}s"
             >
-                <div
-                    class="w-[1px] h-[20px] bg-gradient-to-b from-[#89b4fa]/50 to-transparent"
-                ></div>
+                <div class="accent-line"></div>
             </div>
         {/each}
 
-        <!-- Enhanced grid pattern -->
         <div class="absolute inset-0"></div>
         <div
             class="absolute inset-0 bg-[linear-gradient(to_right,#6e6c7e1a_1px,transparent_1px),linear-gradient(to_bottom,#6e6c7e1a_1px,transparent_1px)]
@@ -106,18 +100,51 @@
     }
 
     @keyframes float {
-        0%,
-        100% {
-            transform: translateY(0);
-            opacity: 0.5;
+        0% {
+            transform: translateY(100px) rotate(5deg);
+            opacity: 0;
+        }
+        20% {
+            opacity: 0.7;
         }
         50% {
-            transform: translateY(-20px);
-            opacity: 0.2;
+            transform: translateY(-100px) rotate(-5deg);
+            opacity: 0.3;
+        }
+        80% {
+            opacity: 0.7;
+        }
+        100% {
+            transform: translateY(-300px) rotate(5deg);
+            opacity: 0;
         }
     }
 
+    @keyframes pulse {
+        0%, 100% {
+            transform: scaleY(1) translateZ(0);
+        }
+        50% {
+            transform: scaleY(1.2) translateZ(0);
+        }
+    }
+
+    .accent-line {
+        width: 1px;
+        height: 40px;
+        background: linear-gradient(
+            180deg, 
+            rgba(137, 180, 250, 0.7) 0%,
+            rgba(203, 166, 247, 0.4) 50%,
+            transparent 100%
+        );
+        box-shadow: 0 0 8px rgba(137, 180, 250, 0.3);
+        transform-origin: center;
+        animation: pulse 3s ease-in-out infinite;
+    }
+
     .animate-float {
-        animation: float 5s ease-in-out infinite;
+        will-change: transform, opacity;
+        animation: float 12s ease-out infinite;
     }
 </style>

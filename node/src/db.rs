@@ -27,7 +27,6 @@ async fn create_tables(db: &libsql::Database) {
         healthcheck_endpoint TEXT,
         healthcheck_timeout INTEGER DEFAULT 5000,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-
     )",
         (),
     )

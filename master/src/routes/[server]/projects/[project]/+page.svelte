@@ -44,17 +44,32 @@
     }
 
     async function saveEnvVars() {
-        editedProject.env = stringifyEnvVars(envVars);
-        const formData = new FormData();
-        Object.entries(editedProject).forEach(([key, value]) => {
-            formData.append(key, value ?? "");
-        });
+        try {
+            const env = stringifyEnvVars(envVars);
+            const formData = new FormData();
+            
+            // Send all project data, not just env
+            Object.entries(editedProject).forEach(([key, value]) => {
+                formData.append(key, value ?? '');
+            });
+            formData.set('env', env);
 
-        await fetch(`?/updateProject`, {
-            method: "POST",
-            body: formData,
-        });
-        showEnvModal = false;
+            const response = await fetch('?/updateProject', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) throw new Error('Failed to update project');
+            
+            showEnvModal = false;
+            // Update local data
+            data.project = {
+                ...data.project,
+                env: env
+            };
+        } catch (e) {
+            console.error('Failed to save project:', e);
+        }
     }
 
     async function pollDeployments() {
@@ -133,7 +148,21 @@
     async function saveProjectSettings(event) {
         event.preventDefault();
         const formData = new FormData();
-        formData.append('domain', editedProject.domain);
+        formData.append('domain', editedProject.domain ?? '');
+
+        // Only send other fields if they've changed
+        if (editedProject.name !== data.project.name ||
+            editedProject.git_repo !== data.project.git_repo ||
+            editedProject.install_cmd !== data.project.install_cmd ||
+            editedProject.build_cmd !== data.project.build_cmd ||
+            editedProject.run_cmd !== data.project.run_cmd) {
+            
+            Object.entries(editedProject).forEach(([key, value]) => {
+                if (key !== 'domain') {
+                    formData.append(key, value ?? '');
+                }
+            });
+        }
 
         const response = await fetch('?/updateProject', {
             method: 'POST',
@@ -143,12 +172,12 @@
         if (response.ok) {
             showEditModal = false;
             // Update local data
-            data.project.domain = editedProject.domain;
+            data.project = { ...data.project, domain: editedProject.domain };
         }
     }
 
     onMount(() => {
-        pollDeployments(); // Initial fetch
+        pollDeployments(); 
         pollingInterval = setInterval(pollDeployments, 5000);
     });
 
