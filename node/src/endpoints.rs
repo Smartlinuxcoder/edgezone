@@ -30,6 +30,7 @@ pub struct Deployment {
     pub commit_hash: String,
     pub status: i32,
     pub logs: String,
+    pub created_at: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -44,8 +45,15 @@ pub struct MiniDep {
     pub project_id: i32,
     pub commit_hash: String,
     pub status: i32,
+    pub created_at: String,
 }
 
+pub const STATUS_PENDING: i32 = 0;
+pub const STATUS_INSTALLING: i32 = 1;
+pub const STATUS_BUILDING: i32 = 2;
+pub const STATUS_RUNNING: i32 = 3;
+pub const STATUS_FAILED: i32 = 4;
+pub const STATUS_STOPPED: i32 = 5;
 
 pub async fn create_project(
     State(state): State<AppState>,
@@ -150,12 +158,16 @@ pub async fn deploy(
     Path(project_id): Path<String>,
 ) -> Result<(StatusCode, HeaderMap, Json<Deployment>), AppError> {
     let conn = state.db.connect()?;
+    
+   core::stop_deployment(project_id.parse()?).await?;
+
     let deployment = Deployment {
         id: Some(0),  // Set temporary ID
         project_id: project_id.parse()?,
         commit_hash: String::new(),
-        status: 0,
+        status: STATUS_PENDING,
         logs: String::from("Starting deployment...\n"),
+        created_at: String::new(),
     };
 
     conn.execute(
@@ -212,7 +224,7 @@ pub async fn list_deployments(
 
     let mut rows = conn
         .query(
-            "SELECT id, project_id, commit_hash, status
+            "SELECT id, project_id, commit_hash, status, created_at
              FROM deployments WHERE project_id = ?",
             [project_id],
         )
@@ -227,6 +239,7 @@ pub async fn list_deployments(
             project_id: row.get(1)?,
             commit_hash: row.get(2)?,
             status: row.get(3)?,
+            created_at: row.get(4)?,
         };
         deployments.push(deployment);
     }
@@ -239,7 +252,7 @@ pub async fn get_deployment(
     let conn = state.db.connect()?;
     let mut rows = conn
         .query(
-            "SELECT id, project_id, commit_hash, status, logs
+            "SELECT id, project_id, commit_hash, status, logs, created_at
              FROM deployments WHERE project_id = ? AND id = ?",
             [project_id, deployment_id],
         )
@@ -254,12 +267,32 @@ pub async fn get_deployment(
         commit_hash: row.get(2)?,
         status: row.get(3)?,
         logs: row.get(4)?,
+        created_at: row.get(5)?,
     };
     Ok(Json(deployment))
 }
-//placeholder
+
 pub async fn restart_deployment(
-    Path((_project_id, _deployment_id)): Path<(String, String)>,
-) -> StatusCode {
-    StatusCode::OK
+    State(state): State<AppState>,
+    Path((project_id, deployment_id)): Path<(String, String)>,
+) -> Result<StatusCode, AppError> {
+    let conn = state.db.connect()?;
+    
+    conn.execute(
+        "UPDATE deployments SET status = ? WHERE project_id = ? AND status = ?",
+        (STATUS_STOPPED, project_id.clone(), STATUS_RUNNING)
+    ).await?;
+
+    conn.execute(
+        "UPDATE deployments SET status = ?, logs = 'Restarting deployment...\n' WHERE id = ?",
+        (STATUS_PENDING, deployment_id.clone())
+    ).await?;
+
+    tokio::spawn(async move {
+        if let Err(e) = core::deploy(project_id.parse().unwrap(), deployment_id.parse().unwrap()).await {
+            eprintln!("Deployment restart error: {:?}", e);
+        }
+    });
+
+    Ok(StatusCode::OK)
 }

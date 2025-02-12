@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { user } from '$lib/server/db/schema';
+import { user, projects } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 
@@ -12,32 +12,11 @@ export const load = async ({ fetch, params }) => {
     const server = servers[0];
     
     try {
-        const [project, deployments] = await Promise.all([
-            fetch(`/api/servers/${server.id}?path=/projects/${params.project}`).then(r => r.json()),
-            fetch(`/api/servers/${server.id}?path=/projects/${params.project}/deployments`).then(r => r.json())
-        ]);
-        
-        let latestDeployment = null;
-        if (deployments.length > 0) {
-            latestDeployment = deployments[0];
-            try {
-                const logsRes = await fetch(
-                    `/api/servers/${server.id}?path=/projects/${params.project}/deployments/${latestDeployment.id}`
-                );
-                if (logsRes.ok) {
-                    const logsData = await logsRes.json();
-                    latestDeployment.logs = logsData.logs;
-                }
-            } catch (e) {
-                console.error('Error fetching latest deployment logs:', e);
-            }
-        }
+        const project = await fetch(`/api/servers/${server.id}?path=/projects/${params.project}`).then(r => r.json());
         
         return {
             server,
-            project,
-            deployments,
-            latestDeployment
+            project
         };
     } catch (e) {
         console.error('Error fetching project:', e);
@@ -46,7 +25,7 @@ export const load = async ({ fetch, params }) => {
 };
 
 export const actions = {
-    updateProject: async ({ fetch, params, request }) => {
+    updateProject: async ({ params, request }) => {
         const data = await request.formData();
         const projectData = {
             name: data.get('name'),
@@ -58,17 +37,16 @@ export const actions = {
             healthcheck_endpoint: data.get('healthcheck_endpoint') || null,
             healthcheck_timeout: Number(data.get('healthcheck_timeout')) || 30
         };
+        const domain = data.get('domain');
 
         try {
-            const res = await fetch(`/api/servers/${params.server}?path=/projects/${params.project}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(projectData)
-            });
-
-            if (!res.ok) throw new Error('Failed to update project');
+            await db.update(projects)
+                .set({ domain })
+                .where(eq(projects.id, Number(params.project)));
+                
             return { success: true };
         } catch (e) {
+            console.error('Failed to update project:', e);
             return { error: 'Failed to update project' };
         }
     },

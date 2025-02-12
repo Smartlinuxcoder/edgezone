@@ -1,20 +1,63 @@
-use std::fs;
+use std::{fs, process::Stdio};
 use super::super::{db, error::AppError};
 use super::Project;
 use tokio::io::AsyncBufReadExt;
+use super::{STATUS_PENDING, STATUS_INSTALLING, STATUS_BUILDING, STATUS_RUNNING, STATUS_FAILED, STATUS_STOPPED};
 
 pub async fn new_project(path: &String) -> Result<(), AppError> {
     fs::create_dir_all(format!("projects/{}", path))?;
     Ok(())
 }
-pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
+
+pub async fn stop_deployment(proj_id: i32) -> Result<(), AppError> {
     let db = db::init_db().await;
     let conn = db.db.connect()?;
+
+    // Find and stop all running deployments for this project
+    conn.execute(
+        "UPDATE deployments SET status = ? WHERE project_id = ? AND status = ?",
+        (STATUS_STOPPED, proj_id, STATUS_RUNNING)
+    ).await?;
+
+    // Optional: Use process signals to stop the running processes
+    // This depends on your OS and requirements
+    let output = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("pkill -f \"projects/{}/*/\"", proj_id))
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        println!("Warning: Failed to stop old processes: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    Ok(())
+}
+
+pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
+    // Stop any existing deployments first
+    stop_deployment(proj_id).await?;
+
+    let db = db::init_db().await;
+    let conn = db.db.connect()?;
+
+    conn.execute(
+        "UPDATE deployments SET status = ? WHERE project_id = ? AND status = ?",
+        (STATUS_STOPPED, proj_id, STATUS_RUNNING)
+    ).await?;
     
     async fn update_logs(conn: &libsql::Connection, deployment_id: i64, new_logs: &str) -> Result<(), AppError> {
         conn.execute(
             "UPDATE deployments SET logs = logs || ? WHERE id = ?",
             (new_logs, deployment_id)
+        ).await?;
+        Ok(())
+    }
+
+    async fn update_status(conn: &libsql::Connection, deployment_id: i64, status: i32) -> Result<(), AppError> {
+        conn.execute(
+            "UPDATE deployments SET status = ? WHERE id = ?",
+            (status, deployment_id)
         ).await?;
         Ok(())
     }
@@ -62,12 +105,14 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
 
     update_logs(&conn, deployment_id, &String::from_utf8_lossy(&output.stdout)).await?;
     if !output.status.success() {
+        update_status(&conn, deployment_id, STATUS_FAILED).await?;
         let error = String::from_utf8_lossy(&output.stderr).to_string();
         update_logs(&conn, deployment_id, &format!("Error: {}\n", error)).await?;
         return Err(AppError::Internal(error));
     }
 
     if let Some(cmd) = project.install_cmd.as_deref() {
+        update_status(&conn, deployment_id, STATUS_INSTALLING).await?;
         update_logs(&conn, deployment_id, &format!("Running install command: {}\n", cmd)).await?;
         let install = tokio::process::Command::new("sh")
             .arg("-c")
@@ -78,6 +123,7 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
 
         update_logs(&conn, deployment_id, &String::from_utf8_lossy(&install.stdout)).await?;
         if !install.status.success() {
+            update_status(&conn, deployment_id, STATUS_FAILED).await?;
             let error = String::from_utf8_lossy(&install.stderr).to_string();
             update_logs(&conn, deployment_id, &format!("Error: {}\n", error)).await?;
             return Err(AppError::Internal(error));
@@ -85,6 +131,7 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
     }
 
     if let Some(cmd) = project.build_cmd.as_deref() {
+        update_status(&conn, deployment_id, STATUS_BUILDING).await?;
         update_logs(&conn, deployment_id, &format!("Running build command: {}\n", cmd)).await?;
         let build = tokio::process::Command::new("sh")
             .arg("-c")
@@ -95,20 +142,27 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
 
         update_logs(&conn, deployment_id, &String::from_utf8_lossy(&build.stdout)).await?;
         if !build.status.success() {
+            update_status(&conn, deployment_id, STATUS_FAILED).await?;
             let error = String::from_utf8_lossy(&build.stderr).to_string();
             update_logs(&conn, deployment_id, &format!("Error: {}\n", error)).await?;
             return Err(AppError::Internal(error));
         }
     }
 
+    update_status(&conn, deployment_id, STATUS_RUNNING).await?;
     let run_cmd = project.run_cmd.ok_or_else(|| AppError::Internal("Run command is required".to_string()))?;
     update_logs(&conn, deployment_id, &format!("Starting service with: {}\n", run_cmd)).await?;
+    
+    let marker_path = format!("{}/pid", path);
+    fs::write(&marker_path, deployment_id.to_string())?;
+
     let mut run = tokio::process::Command::new("sh")
         .arg("-c")
-        .arg(run_cmd)
+        .arg(&run_cmd)
         .current_dir(&path)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()?;
 
     let deployment_id_clone = deployment_id;

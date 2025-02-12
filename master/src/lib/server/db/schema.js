@@ -5,3 +5,10 @@ export const user = sqliteTable('servers', {
 	name: text('name').notNull(),
 	url: text('url').notNull(),
 });
+
+export const projects = sqliteTable('projects', {
+	id: integer('id').primaryKey(),
+	server_id: integer('server_id').notNull(),
+	name: text('name').notNull(),
+	domain: text('domain'),
+});
