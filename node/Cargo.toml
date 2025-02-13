@@ -8,7 +8,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/Smartlinuxcoder/edgezone"
 keywords = ["edge-computing", "distributed", "server"]
 categories = ["web-programming::http-server"]
-readme = "README.md"
+readme = "../README.md"
 
 
 [dependencies]
