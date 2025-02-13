@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if ! command -v cargo &> /dev/null; then
+if ! which cargo > /dev/null 2>&1; then
     echo "Cargo not found. Installing Rust and Cargo..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
     source $HOME/.cargo/env
