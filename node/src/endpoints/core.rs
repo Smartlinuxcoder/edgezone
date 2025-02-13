@@ -3,43 +3,70 @@ use super::super::{db, error::AppError};
 use super::Project;
 use tokio::io::AsyncBufReadExt;
 use super::{STATUS_PENDING, STATUS_INSTALLING, STATUS_BUILDING, STATUS_RUNNING, STATUS_FAILED, STATUS_STOPPED};
+use crate::db::AppState;
+
+async fn kill_process(pid: i32) -> Result<(), AppError> {
+    let _ = tokio::process::Command::new("kill")
+        .arg("-15")
+        .arg(&pid.to_string())
+        .output()
+        .await;
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    print!("Killing process with pid: {}\n", pid);
+    let _ = tokio::process::Command::new("kill")
+/*         .arg("-9")
+ */        .arg(&pid.to_string())
+        .output()
+        .await;
+
+    Ok(())
+}
 
 pub async fn new_project(path: &String) -> Result<(), AppError> {
     fs::create_dir_all(format!("projects/{}", path))?;
     Ok(())
 }
 
-pub async fn stop_deployment(proj_id: i32) -> Result<(), AppError> {
-    let db = db::init_db().await;
-    let conn = db.db.connect()?;
-
-    // Find and stop all running deployments for this project
-    conn.execute(
-        "UPDATE deployments SET status = ? WHERE project_id = ? AND status = ?",
-        (STATUS_STOPPED, proj_id, STATUS_RUNNING)
+pub async fn stop_deployment_with_conn(conn: &libsql::Connection, proj_id: i32) -> Result<(), AppError> {
+    conn.query("PRAGMA busy_timeout = 10000", ()).await?;
+    // Get running deployments
+    let mut rows = conn.query(
+        "SELECT d.id, p.name FROM deployments d 
+         JOIN projects p ON p.id = d.project_id 
+         WHERE d.project_id = ? AND d.status != ?",
+        (proj_id, STATUS_STOPPED)
     ).await?;
-
-    // Optional: Use process signals to stop the running processes
-    // This depends on your OS and requirements
-    let output = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(format!("pkill -f \"projects/{}/*/\"", proj_id))
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        println!("Warning: Failed to stop old processes: {}", String::from_utf8_lossy(&output.stderr));
+    
+    while let Some(row) = rows.next().await? {
+        let deployment_id: i64 = row.get(0)?;
+        let project_name: String = row.get(1)?;
+        
+        let path = format!("projects/{}/{}", project_name, deployment_id);
+        let pid_file = format!("{}/pid", path);
+        
+        if let Ok(content) = fs::read_to_string(&pid_file) {
+            if let Ok(pid) = content.trim().parse::<i32>() {
+                println!("Stopping process {} for deployment {}", pid, deployment_id);
+                let _ = kill_process(pid).await;
+            }
+        }
+        
+        let _ = fs::remove_file(pid_file);
     }
+
+    conn.execute(
+        "UPDATE deployments SET status = ? WHERE project_id = ? AND status != ?",
+        (STATUS_STOPPED, proj_id, STATUS_STOPPED)
+    ).await?;
 
     Ok(())
 }
 
-pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
-    // Stop any existing deployments first
-    stop_deployment(proj_id).await?;
-
-    let db = db::init_db().await;
-    let conn = db.db.connect()?;
+pub async fn deploy(state: &AppState, proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
+    let conn = state.db.connect()?;
+    conn.query("PRAGMA busy_timeout = 10000", ()).await?; 
+    stop_deployment_with_conn(&conn, proj_id).await?; 
 
     conn.execute(
         "UPDATE deployments SET status = ? WHERE project_id = ? AND status = ?",
@@ -98,7 +125,19 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
         .await?;
 
     update_logs(&conn, deployment_id, &String::from_utf8_lossy(&output.stdout)).await?;
-    if !output.status.success() {
+    if output.status.success() {
+        let rev_output = tokio::process::Command::new("git")
+            .arg("rev-parse")
+            .arg("HEAD")
+            .current_dir(&path)
+            .output()
+            .await?;
+        let commit_hash = String::from_utf8_lossy(&rev_output.stdout).trim().to_string();
+        conn.execute(
+            "UPDATE deployments SET commit_hash = ? WHERE id = ?",
+            (commit_hash, deployment_id)
+        ).await?;
+    } else {
         update_status(&conn, deployment_id, STATUS_FAILED).await?;
         let error = String::from_utf8_lossy(&output.stderr).to_string();
         update_logs(&conn, deployment_id, &format!("Error: {}\n", error)).await?;
@@ -153,9 +192,8 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
     let run_cmd = project.run_cmd.ok_or_else(|| AppError::Internal("Run command is required".to_string()))?;
     update_logs(&conn, deployment_id, &format!("Starting service with: {}\n", run_cmd)).await?;
     
-    let marker_path = format!("{}/pid", path);
-    fs::write(&marker_path, deployment_id.to_string())?;
-
+    let pid_file = format!("{}/pid", path);
+    
     let mut run = tokio::process::Command::new("sh")
         .arg("-c")
         .arg(&run_cmd)
@@ -165,8 +203,14 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
         .process_group(0)
         .spawn()?;
 
+    if let Some(pid) = run.id() {
+        fs::write(&pid_file, pid.to_string())?;
+    }
+
     let deployment_id_clone = deployment_id;
     let conn_clone = conn.clone();
+    let pid_file_clone = pid_file.clone();
+    
     tokio::spawn(async move {
         let stdout = run.stdout.take().unwrap();
         let stderr = run.stderr.take().unwrap();
@@ -182,6 +226,17 @@ pub async fn deploy(proj_id: i32, deployment_id: i64) -> Result<(), AppError> {
                 Ok(Some(line)) = stderr_reader.next_line() => {
                     let _ = update_logs(&conn_clone, deployment_id_clone, &format!("Error: {}\n", line)).await;
                 },
+                result = run.wait() => {
+                    // Process terminated
+                    let _ = fs::remove_file(pid_file_clone);
+                    let _ = update_status(&conn_clone, deployment_id_clone, STATUS_STOPPED).await;
+                    let status = match result {
+                        Ok(status) => format!("Process exited with status: {}", status),
+                        Err(e) => format!("Process error: {}", e)
+                    };
+                    let _ = update_logs(&conn_clone, deployment_id_clone, &format!("Process terminated: {}\n", status)).await;
+                    break;
+                }
                 else => break,
             }
         }

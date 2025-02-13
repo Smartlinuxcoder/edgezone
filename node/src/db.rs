@@ -8,6 +8,9 @@ pub struct AppState {
 
 pub async fn init_db() -> AppState {
     let db = Builder::new_local("./data.db").build().await.unwrap();
+    let conn = db.connect().unwrap();
+    conn.query("PRAGMA journal_mode = WAL", ()).await.unwrap();
+    conn.query("PRAGMA busy_timeout = 5000", ()).await.unwrap();
     create_tables(&db).await;
     AppState { db: Arc::new(db) }
 }

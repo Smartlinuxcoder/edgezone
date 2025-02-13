@@ -159,8 +159,7 @@ pub async fn deploy(
     Path(project_id): Path<String>,
 ) -> Result<(StatusCode, HeaderMap, Json<Deployment>), AppError> {
     let conn = state.db.connect()?;
-    
-   core::stop_deployment(project_id.parse()?).await?;
+    core::stop_deployment_with_conn(&conn, project_id.parse()?).await?;
 
     let deployment = Deployment {
         id: Some(0),  // Set temporary ID
@@ -193,7 +192,8 @@ pub async fn deploy(
     };
 
     tokio::spawn(async move {
-        if let Err(e) = core::deploy(project_id.parse().unwrap(), deployment_id).await {
+        let s = state.clone();
+        if let Err(e) = core::deploy(&s, project_id.parse().unwrap(), deployment_id).await {
             eprintln!("Deployment error: {:?}", e);
         }
     });
@@ -290,7 +290,7 @@ pub async fn restart_deployment(
     ).await?;
 
     tokio::spawn(async move {
-        if let Err(e) = core::deploy(project_id.parse().unwrap(), deployment_id.parse().unwrap()).await {
+        if let Err(e) = core::deploy(&state, project_id.parse().unwrap(), deployment_id.parse().unwrap()).await {
             eprintln!("Deployment restart error: {:?}", e);
         }
     });

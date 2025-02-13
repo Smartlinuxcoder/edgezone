@@ -6,11 +6,36 @@ mod endpoints;
 mod db;
 mod error;
 
+async fn auto_deploy(state: &db::AppState) {
+    let conn = state.db.connect().unwrap();
+    
+    let mut projects = conn.query(
+        "SELECT p.id FROM projects p 
+         INNER JOIN deployments d ON d.project_id = p.id 
+         WHERE d.status = 3 
+         GROUP BY p.id", 
+        ()
+    ).await.unwrap();
+
+    while let Ok(Some(row)) = projects.next().await {
+        let project_id: i32 = row.get(0).unwrap();
+        
+        if let Err(e) = endpoints::deploy(
+            axum::extract::State(state.clone()),
+            axum::extract::Path(project_id.to_string())
+        ).await {
+            eprintln!("Failed to auto-deploy project {}: {:?}", project_id, e);
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
     let state = db::init_db().await;
+    
+    auto_deploy(&state).await;
 
     let app = Router::new()
         .route("/", get(root))
