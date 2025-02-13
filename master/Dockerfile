@@ -19,9 +19,8 @@ EXPOSE 3000
 
 RUN mkdir -p /app/data
 
-ENV NONINTERACTIVE=true
 ENV DATABASE_URL=file:local.db
-ENV ORIGIN=http://localhost:3001
+
 
 RUN echo '#!/bin/sh\n\
 npm run db:push -- --force\n\
