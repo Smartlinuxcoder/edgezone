@@ -1,4 +1,5 @@
 <script>
+    import OsIcon from '$lib/components/OsIcon.svelte';
     export let data;
     let showModal = false;
     let showDeleteModal = false;
@@ -27,6 +28,11 @@
         if (e.target.closest('button')) return;
         window.location.href = `/${serverId}`;
     }
+
+    function needsUpdate(serverVersion, latestVersion) {
+        if (!serverVersion || !latestVersion) return false;
+        return serverVersion !== latestVersion;
+    }
 </script>
 
 <div class="container mx-auto max-w-5xl">
@@ -40,12 +46,37 @@
             <div class="group p-6 bg-gradient-to-br from-[#313244]/30 to-[#313244]/10 hover:from-[#313244]/40 hover:to-[#313244]/20 
                       rounded-lg border border-[#6e6c7e]/20 transition-all duration-200 cursor-pointer"
                  on:click={(e) => handleServerClick(e, server.id)}>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-[#cdd6f4] text-lg font-medium">{server.name}</h3>
-                        <p class="text-[#a6adc8] text-sm mt-1">{server.url}</p>
+                <div class="flex items-start justify-between">
+                    <div class="flex gap-4">
+                        <div class="pt-1">
+                            <OsIcon os={server.info?.os || 'unknown'} size={32} />
+                        </div>
+                        <div>
+                            <h3 class="text-[#cdd6f4] text-lg font-medium">{server.name}</h3>
+                            <p class="text-[#a6adc8] text-sm mt-1">{server.url}</p>
+                            {#if server.info}
+                                <div class="flex items-center gap-2 mt-2 text-[#a6adc8] text-sm">
+                                    <OsIcon os={server.info.os} distro={server.info.distro} size={32} />
+                                    <div class="flex flex-col">
+                                        <span>{server.info.distro || server.info.os}</span>
+                                        <span class="text-[#6c7086] text-xs">{server.info.arch}</span>
+                                    </div>
+                                    <span class="text-[#89b4fa] ml-auto">v{server.info.version}</span>
+                                </div>
+                            {/if}
+                        </div>
                     </div>
                     <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                        {#if needsUpdate(server.info?.version, data.latestVersion)}
+                            <form method="POST" action="?/updateNodeVersion">
+                                <input type="hidden" name="id" value={server.id}>
+                                <button type="submit" class="p-2 hover:bg-[#89b4fa]/20 rounded-md" title="Update to {data.latestVersion}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#89b4fa]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </button>
+                            </form>
+                        {/if}
                         <button class="p-2 hover:bg-[#1e1e2e]/50 rounded-md" on:click={() => openEditModal(server)}>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#cdd6f4]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />

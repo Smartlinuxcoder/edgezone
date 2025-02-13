@@ -54,6 +54,7 @@ pub struct Info {
     version: String,
     rust_version: String,
     os: String,
+    distro: String,
     arch: String,
 }
 
@@ -310,12 +311,12 @@ pub async fn restart_deployment(
 
 pub async fn update() -> Result<StatusCode, AppError> {
     tokio::spawn(async move {
+        println!("Updating edgezone-node...");
         let output = tokio::process::Command::new("cargo")
             .arg("install")
             .arg("edgezone-node")
             .output()
             .await;
-
         match output {
             Ok(output) if output.status.success() => {
                 println!("Update successful, restarting...");
@@ -335,11 +336,32 @@ pub async fn update() -> Result<StatusCode, AppError> {
 }
 
 pub async fn info() -> Result<Json<Info>, AppError> {
+    let distro = if cfg!(target_os = "linux") {
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg("cat /etc/*-release | grep -i pretty_name | cut -d= -f2")
+            .output()
+            .ok();
+        
+        match output {
+            Some(out) if out.status.success() => {
+                String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .trim_matches('"')
+                    .to_string()
+            }
+            _ => "Unknown Linux".to_string()
+        }
+    } else {
+        std::env::consts::OS.to_string()
+    };
+
     Ok(Json(Info {
         name: env!("CARGO_PKG_NAME").to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         rust_version: env!("CARGO_PKG_RUST_VERSION", "unknown").to_string(),
         os: std::env::consts::OS.to_string(),
+        distro,
         arch: std::env::consts::ARCH.to_string(),
     }))
 }
