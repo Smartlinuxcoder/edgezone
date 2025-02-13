@@ -1,6 +1,6 @@
 [package]
 name = "edgezone-node"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Smartlinuxcoder <smartcoder@smartlinux.xyz>"]
 description = "EdgeZone node server for distributed edge computing"
@@ -18,4 +18,5 @@ serde = "1.0.217"
 serde_derive = "1.0.217"
 tokio = { version = "1.43.0", features = ["full"] }
 tracing-subscriber = "0.3.19"
+clap = { version = "4.4", features = ["derive"] }
 

@@ -1,6 +1,7 @@
 use axum::{
     routing::{delete, get, post, put}, Router,
 };
+use clap::Parser;
 
 mod endpoints;
 mod db;
@@ -29,10 +30,18 @@ async fn auto_deploy(state: &db::AppState) {
     }
 }
 
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[arg(short, long, default_value_t = 3000)]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
-
+    
+    let cli = Cli::parse();
     let state = db::init_db().await;
     
     auto_deploy(&state).await;
@@ -54,7 +63,8 @@ async fn main() {
         .route("/projects/{project_id}/deployments/{deployment_id}/restart", post(endpoints::restart_deployment))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", cli.port)).await.unwrap();
+    println!("Listening on port {}", cli.port);
     axum::serve(listener, app).await.unwrap();
 }
 
