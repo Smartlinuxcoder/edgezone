@@ -68,6 +68,7 @@ export const actions = {
 			await db.insert(user).values({ name, url });
 			return { success: true };
 		} catch (error) {
+			console.error('Failed to add server:', error);
 			return fail(500, { error: 'Failed to add server' });
 		}
 	},
