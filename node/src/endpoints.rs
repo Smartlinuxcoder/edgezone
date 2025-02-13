@@ -48,6 +48,16 @@ pub struct MiniDep {
     pub created_at: String,
 }
 
+#[derive(Serialize)]
+pub struct Info {
+    name: String,
+    version: String,
+    rust_version: String,
+    os: String,
+    arch: String,
+}
+
+
 pub const STATUS_PENDING: i32 = 0;
 pub const STATUS_INSTALLING: i32 = 1;
 pub const STATUS_BUILDING: i32 = 2;
@@ -296,4 +306,40 @@ pub async fn restart_deployment(
     });
 
     Ok(StatusCode::OK)
+}
+
+pub async fn update() -> Result<StatusCode, AppError> {
+    tokio::spawn(async move {
+        let output = tokio::process::Command::new("cargo")
+            .arg("install")
+            .arg("edgezone-node")
+            .output()
+            .await;
+
+        match output {
+            Ok(output) if output.status.success() => {
+                println!("Update successful, restarting...");
+                std::process::exit(0);
+            }
+            Ok(output) => {
+                let error = String::from_utf8_lossy(&output.stderr);
+                eprintln!("Update failed: {}", error);
+            }
+            Err(e) => {
+                eprintln!("Update failed: {}", e);
+            }
+        }
+    });
+
+    Ok(StatusCode::CREATED)
+}
+
+pub async fn info() -> Result<Json<Info>, AppError> {
+    Ok(Json(Info {
+        name: env!("CARGO_PKG_NAME").to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        rust_version: env!("CARGO_PKG_RUST_VERSION", "unknown").to_string(),
+        os: std::env::consts::OS.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+    }))
 }

@@ -39,6 +39,8 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(root))
+        .route("/update", post(endpoints::update))
+        .route("/info", get(endpoints::info))
         // Project routes
         .route("/projects", post(endpoints::create_project))
         .route("/projects", get(endpoints::list_projects))

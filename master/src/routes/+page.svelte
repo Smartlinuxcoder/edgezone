@@ -24,7 +24,6 @@
     }
 
     function handleServerClick(e, serverId) {
-        // Don't navigate if clicking on the edit or delete buttons
         if (e.target.closest('button')) return;
         window.location.href = `/${serverId}`;
     }
