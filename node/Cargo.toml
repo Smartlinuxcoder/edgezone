@@ -1,6 +1,6 @@
 [package]
 name = "edgezone-node"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Smartlinuxcoder <smartcoder@smartlinux.xyz>"]
 description = "EdgeZone node server for distributed edge computing"

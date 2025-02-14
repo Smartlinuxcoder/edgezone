@@ -312,9 +312,9 @@ pub async fn restart_deployment(
 pub async fn update() -> Result<StatusCode, AppError> {
     tokio::spawn(async move {
         println!("Updating edgezone-node...");
-        let output = tokio::process::Command::new("cargo")
-            .arg("install")
-            .arg("edgezone-node")
+        let output = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg("curl https://raw.githubusercontent.com/Smartlinuxcoder/edgezone/refs/heads/main/install.sh | bash")
             .output()
             .await;
         match output {
