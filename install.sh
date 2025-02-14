@@ -1,6 +1,17 @@
 #!/bin/bash
-# GitHub token for downloading artifacts, no perms given
-GITHUB_TOKEN="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"
+
+ENCRYPTED_TOKEN="U2FsdGVkX19DN2dacpjAsQXZ9LDmC5ed0Jk5P7bxRSI5lfVzxFges18V9w7FKmEf
+UMZzYUz7ImVMzyjVWV2GYcYvLB977fKMZXaxIRJAH52CpQRTicmKHS37BJAd1DXg
+qKycnI2Nn9Grq8XmAs81Rg=="
+KEY="sigmasigma"
+
+# Decrypt token
+GITHUB_TOKEN=$(echo "$ENCRYPTED_TOKEN" | openssl enc -aes-256-cbc -md sha256 -a -d -k "$KEY" 2>/dev/null)
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to decrypt token"
+    exit 1
+fi
 
 ARCH=$(uname -m)
 IS_PI_ZERO=false
@@ -13,11 +24,6 @@ if [ -f /sys/firmware/devicetree/base/model ]; then
 fi
 
 if [ "$IS_PI_ZERO" = true ]; then
-    if [ -z "$GITHUB_TOKEN" ]; then
-        echo "Error: GITHUB_TOKEN environment variable is required to download artifacts"
-        echo "Please set it with: export GITHUB_TOKEN=your_github_token"
-        exit 1
-    fi
 
     echo "Detected Raspberry Pi Zero 2 W, downloading pre-compiled binary..."
     TEMP_DIR=$(mktemp -d)
