@@ -12,12 +12,18 @@ fi
 
 if [ "$IS_PI_ZERO" = true ]; then
     echo "Detected Raspberry Pi Zero 2 W, downloading pre-compiled binary..."
+    TEMP_DIR=$(mktemp -d)
     LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/smartlinuxcoder/edgezone/actions/artifacts \
         | grep -o '"archive_download_url": "[^"]*' \
         | head -1 \
         | cut -d'"' -f4)
     
-    sudo curl -L -o /usr/local/bin/edgezone-node $LATEST_RELEASE_URL
+    cd "$TEMP_DIR"
+    curl -L -o artifact.zip "$LATEST_RELEASE_URL"
+    unzip artifact.zip
+    sudo mv edgezone-node /usr/local/bin/
+    cd - > /dev/null
+    rm -rf "$TEMP_DIR"
     sudo chmod +x /usr/local/bin/edgezone-node
     BINARY_PATH=/usr/local/bin/edgezone-node
 else
