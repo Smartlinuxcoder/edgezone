@@ -1,7 +1,7 @@
 FROM node:20-slim as builder
 
 
-ENV DATABASE_URL=file:local.db
+ENV DATABASE_URL=file:data/local.db
 
 WORKDIR /app
 COPY package*.json ./
@@ -22,7 +22,7 @@ EXPOSE 3000
 
 RUN mkdir -p /app/data
 
-ENV DATABASE_URL=file:local.db
+ENV DATABASE_URL=file:data/local.db
 
 
 RUN echo '#!/bin/sh\n\
