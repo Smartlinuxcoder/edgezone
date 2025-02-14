@@ -1,3 +1,5 @@
+# this Dockerfile is used to cross-build the project for pi 0 2
+
 FROM rust:latest
 
 RUN apt-get update && \
