@@ -1,4 +1,6 @@
 #!/bin/bash
+# GitHub token for downloading artifacts, no perms given
+GITHUB_TOKEN="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"
 
 ARCH=$(uname -m)
 IS_PI_ZERO=false
@@ -11,15 +13,22 @@ if [ -f /sys/firmware/devicetree/base/model ]; then
 fi
 
 if [ "$IS_PI_ZERO" = true ]; then
+    if [ -z "$GITHUB_TOKEN" ]; then
+        echo "Error: GITHUB_TOKEN environment variable is required to download artifacts"
+        echo "Please set it with: export GITHUB_TOKEN=your_github_token"
+        exit 1
+    fi
+
     echo "Detected Raspberry Pi Zero 2 W, downloading pre-compiled binary..."
     TEMP_DIR=$(mktemp -d)
-    LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/smartlinuxcoder/edgezone/actions/artifacts \
+    LATEST_RELEASE_URL=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+        https://api.github.com/repos/smartlinuxcoder/edgezone/actions/artifacts \
         | grep -o '"archive_download_url": "[^"]*' \
         | head -1 \
         | cut -d'"' -f4)
     
     cd "$TEMP_DIR"
-    curl -L -o artifact.zip "$LATEST_RELEASE_URL"
+    curl -L -H "Authorization: token $GITHUB_TOKEN" -o artifact.zip "$LATEST_RELEASE_URL"
     unzip artifact.zip
     sudo mv edgezone-node /usr/local/bin/
     cd - > /dev/null
@@ -27,6 +36,7 @@ if [ "$IS_PI_ZERO" = true ]; then
     sudo chmod +x /usr/local/bin/edgezone-node
     BINARY_PATH=/usr/local/bin/edgezone-node
 else
+
     if ! which cargo > /dev/null 2>&1; then
         echo "Cargo not found. Installing Rust and Cargo..."
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
