@@ -1,5 +1,8 @@
 FROM node:20-slim as builder
 
+
+ENV DATABASE_URL=file:local.db
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
