@@ -153,7 +153,7 @@ pub async fn deploy(state: &AppState, proj_id: i32, deployment_id: i64) -> Resul
     if let Some(cmd) = project.install_cmd.as_deref() {
         update_status(&conn, deployment_id, STATUS_INSTALLING).await?;
         update_logs(&conn, deployment_id, &format!("Running install command: {}\n", cmd)).await?;
-        let install = tokio::process::Command::new("sh")
+        let install = tokio::process::Command::new("bash")
             .arg("-c")
             .arg(cmd)
             .current_dir(&path)
@@ -172,7 +172,7 @@ pub async fn deploy(state: &AppState, proj_id: i32, deployment_id: i64) -> Resul
     if let Some(cmd) = project.build_cmd.as_deref() {
         update_status(&conn, deployment_id, STATUS_BUILDING).await?;
         update_logs(&conn, deployment_id, &format!("Running build command: {}\n", cmd)).await?;
-        let build = tokio::process::Command::new("sh")
+        let build = tokio::process::Command::new("bash")
             .arg("-c")
             .arg(cmd)
             .current_dir(&path)
@@ -194,7 +194,7 @@ pub async fn deploy(state: &AppState, proj_id: i32, deployment_id: i64) -> Resul
     
     let pid_file = format!("{}/pid", path);
     
-    let mut run = tokio::process::Command::new("sh")
+    let mut run = tokio::process::Command::new("bash")
         .arg("-c")
         .arg(&run_cmd)
         .current_dir(&path)
